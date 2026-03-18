@@ -1,0 +1,9 @@
+path: ./datasets/road_signs
+train: images/train
+val: images/val
+
+names:
+  0: trafficlight
+  1: speedlimit
+  2: crosswalk
+  3: stop
