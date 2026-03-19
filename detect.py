@@ -9,6 +9,10 @@ def run_inference(source, weights, conf_thres):
     # Open the video source (0 for webcam, or a string for a file/URL)
     cap = cv2.VideoCapture(source)
 
+    # Calculate native delay based on video FPS
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    delay = int(1000 / fps) if fps > 0 else 1
+
     while cap.isOpened():
         success, frame = cap.read()
         if not success:
@@ -24,7 +28,8 @@ def run_inference(source, weights, conf_thres):
         cv2.imshow("SP-104 Red Traffic Detection", annotated_frame)
 
         # Break the loop if 'q' is pressed
-        if cv2.waitKey(1) & 0xFF == ord("q"):
+        # Native delay instead of a hardcoded '1'
+        if cv2.waitKey(delay) & 0xFF == ord("q"):
             break
 
     cap.release()
