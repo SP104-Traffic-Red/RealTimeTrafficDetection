@@ -27,6 +27,17 @@ This project implements a real-time traffic detection system using **YOLOv8** to
 
 **Phase 1 Complete:** The baseline YOLOv8 model has been successfully fine-tuned on the Kaggle Road Sign Detection dataset. The inference pipeline is active and capable of processing real-time video feeds with overlaid bounding boxes and confidence scores.
 
+## Detected Classes
+
+This model is trained to detect exactly **4 classes**. It will not recognize or label anything outside of these:
+
+| Class | Description |
+|---|---|
+| `trafficlight` | Traffic lights |
+| `speedlimit` | Speed limit signs |
+| `crosswalk` | Crosswalk signs |
+| `stop` | Stop signs |
+
 ## Environment Setup
 
 1. Clone the repository:

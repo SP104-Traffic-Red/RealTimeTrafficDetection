@@ -39,7 +39,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--source', type=str, default='test_video.mp4', help='Video path or 0 for webcam')
     parser.add_argument('--weights', type=str, default='runs/detect/train/weights/best.pt', help='Model path')
-    parser.add_argument('--conf', type=float, default=0.40, help='Confidence threshold')
+    parser.add_argument('--conf', type=float, default=0.60, help='Confidence threshold')
     args = parser.parse_args()
 
     run_inference(args.source, args.weights, args.conf)
