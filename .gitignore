@@ -29,3 +29,6 @@ Thumbs.db
 
 # Roboflow config
 .roboflow/
+
+# Personal Images
+docs/images/
