@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SP-104 — Real-Time Object Detection for Traffic Cameras</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --gold: #FFC425;
+      --gold-dim: rgba(255, 196, 37, 0.15);
+      --gold-mid: rgba(255, 196, 37, 0.4);
+      --black: #231F20;
+      --bg: #0C0D0F;
+      --surface: #13151A;
+      --surface2: #1A1D24;
+      --text: #E8E9EC;
+      --text-dim: #7A7F8E;
+      --text-faint: #3A3D47;
+      --mono: 'JetBrains Mono', monospace;
+      --sans: 'Space Grotesk', sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+    }
+
+    /* ── Grid background ── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(255,196,37,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,196,37,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Radial glow ── */
+    body::after {
+      content: '';
+      position: fixed; inset: 0;
+      background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(255,196,37,0.07) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Layout ── */
+    .shell {
+      position: relative;
+      z-index: 1;
+      width: 100vw; height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      grid-template-columns: 1fr;
+      gap: 0;
+      padding: 0;
+    }
+
+    /* ── Top bar ── */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 36px;
+      border-bottom: 1px solid rgba(255,196,37,0.12);
+      background: rgba(12,13,15,0.8);
+      backdrop-filter: blur(8px);
+    }
+
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .ksu-logo {
+      height: 42px;
+      width: auto;
+      opacity: 0.9;
+    }
+
+    .divider-v {
+      width: 1px;
+      height: 32px;
+      background: rgba(255,196,37,0.3);
+    }
+
+    .course-badge {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--text-dim);
+      line-height: 1.4;
+    }
+    .course-badge strong {
+      color: var(--gold);
+      font-weight: 500;
+    }
+
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .pill-badge {
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      padding: 5px 12px;
+      border-radius: 3px;
+      background: var(--gold);
+      color: var(--black);
+      text-transform: uppercase;
+    }
+
+    .status-dot {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+    }
+    .status-dot::before {
+      content: '';
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: #4ADE80;
+      box-shadow: 0 0 6px #4ADE80;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* ── Main content ── */
+    .main {
+      display: grid;
+      grid-template-columns: 420px 1fr;
+      gap: 0;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    /* ── Left panel ── */
+    .left-panel {
+      padding: 32px 32px 24px;
+      border-right: 1px solid rgba(255,196,37,0.1);
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      overflow: hidden;
+      background: linear-gradient(180deg, rgba(255,196,37,0.02) 0%, transparent 40%);
+    }
+
+    .project-id-line {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--gold);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      opacity: 0.8;
+    }
+
+    .project-title {
+      font-size: clamp(24px, 2.6vw, 34px);
+      font-weight: 700;
+      line-height: 1.2;
+      color: var(--text);
+      letter-spacing: -0.02em;
+      text-wrap: pretty;
+    }
+    .project-title em {
+      font-style: normal;
+      color: var(--gold);
+    }
+
+    .project-desc {
+      font-size: 14px;
+      line-height: 1.65;
+      color: var(--text-dim);
+      font-weight: 400;
+    }
+
+    /* ── Tech tags ── */
+    .tech-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .tag {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.05em;
+      padding: 4px 10px;
+      border: 1px solid rgba(255,196,37,0.2);
+      border-radius: 2px;
+      color: var(--text-dim);
+      background: rgba(255,196,37,0.04);
+    }
+
+    /* ── Nav links ── */
+    .nav-links {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: auto;
+    }
+
+    .nav-link {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 16px 20px;
+      border: 1px solid rgba(255,196,37,0.15);
+      border-radius: 6px;
+      background: rgba(255,196,37,0.03);
+      text-decoration: none;
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 500;
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+    .nav-link:hover {
+      border-color: var(--gold);
+      background: rgba(255,196,37,0.08);
+      color: var(--gold);
+      transform: translateX(3px);
+    }
+    .nav-link-icon {
+      width: 38px; height: 38px;
+      border-radius: 4px;
+      background: rgba(255,196,37,0.1);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .nav-link-icon svg {
+      width: 18px; height: 18px;
+      stroke: var(--gold);
+      fill: none;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .nav-link-meta {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-faint);
+      letter-spacing: 0.04em;
+      margin-top: 1px;
+    }
+
+    /* ── Right panel (team) ── */
+    .right-panel {
+      padding: 32px 36px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      overflow: hidden;
+    }
+
+    .section-label {
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 0.14em;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .section-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: rgba(255,196,37,0.1);
+    }
+
+    /* ── Team grid ── */
+    .team-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .member-card {
+      background: var(--surface);
+      border: 1px solid rgba(255,196,37,0.1);
+      border-radius: 10px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: border-color 0.25s, box-shadow 0.25s;
+      position: relative;
+    }
+    .member-card:hover {
+      border-color: rgba(255,196,37,0.4);
+      box-shadow: 0 0 24px rgba(255,196,37,0.06);
+    }
+
+    /* ── Detection frame (the hero effect) ── */
+    .photo-wrap {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+      background: #0A0B0D;
+    }
+
+    .member-photo {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: top center;
+      display: block;
+      transition: transform 0.4s ease;
+    }
+    .member-card:hover .member-photo {
+      transform: scale(1.03);
+    }
+
+    /* Scanline overlay */
+    .photo-wrap::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 3px,
+        rgba(0,0,0,0.12) 3px,
+        rgba(0,0,0,0.12) 4px
+      );
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    /* Detection bounding box */
+    .bbox {
+      position: absolute;
+      inset: 22px 10px 10px 10px;
+      border: 3px solid var(--gold);
+      border-radius: 2px;
+      z-index: 3;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      box-shadow: 0 0 12px rgba(255, 196, 37, 0.4), inset 0 0 12px rgba(255, 196, 37, 0.1);
+      pointer-events: none;
+    }
+    .member-card:hover .bbox {
+      opacity: 1;
+    }
+
+    /* Corner decorations */
+    .bbox::before, .bbox::after {
+      content: '';
+      position: absolute;
+      width: 16px; height: 16px;
+      border-color: var(--gold);
+      border-style: solid;
+    }
+    .bbox::before {
+      top: -3px; left: -3px;
+      border-width: 3px 0 0 3px;
+    }
+    .bbox::after {
+      bottom: -3px; right: -3px;
+      border-width: 0 3px 3px 0;
+    }
+
+    .bbox-label {
+      position: absolute;
+      top: -1px; left: 0;
+      transform: translateY(-100%);
+      font-family: var(--mono);
+      font-size: 11px;
+      background: var(--gold);
+      color: var(--black);
+      padding: 3px 8px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      white-space: nowrap;
+      border-radius: 1px 1px 0 0;
+    }
+
+    .conf-score {
+      position: absolute;
+      bottom: 8px; right: 8px;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--gold);
+      background: rgba(0,0,0,0.8);
+      padding: 4px 8px;
+      border-radius: 2px;
+      opacity: 0;
+      transition: opacity 0.3s 0.1s;
+      z-index: 4;
+    }
+    .member-card:hover .conf-score {
+      opacity: 1;
+    }
+
+    /* Photo placeholder */
+    .photo-placeholder {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--surface2);
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-faint);
+    }
+
+    /* ── Member info ── */
+    .member-info {
+      padding: 14px 16px 16px;
+      border-top: 1px solid rgba(255,196,37,0.08);
+      background: linear-gradient(to bottom, var(--surface), rgba(20,22,28,0.95));
+    }
+
+    .member-name {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: -0.01em;
+      margin-bottom: 4px;
+    }
+
+    .member-role {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--gold);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    /* ── Footer ── */
+    .footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 36px;
+      border-top: 1px solid rgba(255,196,37,0.08);
+      background: rgba(12,13,15,0.6);
+    }
+
+    .footer-left {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text-faint);
+      letter-spacing: 0.06em;
+    }
+
+    .footer-right {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text-faint);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    /* ── Entrance animations ── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(14px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .left-panel > * {
+      animation: fadeUp 0.5s ease both;
+    }
+    .left-panel > *:nth-child(1) { animation-delay: 0.05s; }
+    .left-panel > *:nth-child(2) { animation-delay: 0.12s; }
+    .left-panel > *:nth-child(3) { animation-delay: 0.18s; }
+    .left-panel > *:nth-child(4) { animation-delay: 0.24s; }
+    .left-panel > *:nth-child(5) { animation-delay: 0.30s; }
+
+    .member-card:nth-child(1) { animation: fadeUp 0.5s 0.2s ease both; }
+    .member-card:nth-child(2) { animation: fadeUp 0.5s 0.32s ease both; }
+    .member-card:nth-child(3) { animation: fadeUp 0.5s 0.44s ease both; }
+
+    /* ── Tweaks panel ── */
+    #tweaks-panel {
+      display: none;
+      position: fixed;
+      bottom: 24px; right: 24px;
+      width: 240px;
+      background: var(--surface2);
+      border: 1px solid rgba(255,196,37,0.25);
+      border-radius: 10px;
+      padding: 16px;
+      z-index: 999;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-dim);
+      box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+    }
+    #tweaks-panel h4 {
+      font-family: var(--sans);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--gold);
+      margin-bottom: 12px;
+      letter-spacing: 0.04em;
+    }
+    .tweak-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      gap: 10px;
+    }
+    .tweak-row label { flex: 1; }
+    .tweak-row input[type=range] { width: 90px; accent-color: var(--gold); }
+    .tweak-row select {
+      background: var(--surface);
+      border: 1px solid rgba(255,196,37,0.2);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- TOP BAR -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <img src="images/ksu-logo.png" alt="Kennesaw State University" class="ksu-logo" />
+      <div class="divider-v"></div>
+      <div class="course-badge">
+        <strong>CS 4850</strong> Senior Project<br>
+        Spring 2026 · Kennesaw State University
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="status-dot">MODEL ACTIVE</div>
+      <div class="pill-badge">SP-104 RED</div>
+    </div>
+  </header>
+
+  <!-- MAIN -->
+  <div class="main">
+
+    <!-- LEFT PANEL -->
+    <aside class="left-panel">
+
+      <div class="project-id-line">// project SP-104 — Spring 2026</div>
+
+      <h1 class="project-title">
+        Real-Time<br>
+        <em>Object Detection</em><br>
+        for Traffic Cameras
+      </h1>
+
+      <p class="project-desc">
+        A deep learning pipeline using a fine-tuned YOLOv8 model trained on the BDD100K dataset to detect and classify traffic objects in real-time video footage with bounding boxes and confidence scores.
+      </p>
+
+      <div class="tech-tags">
+        <span class="tag">YOLOv8</span>
+        <span class="tag">PyTorch</span>
+        <span class="tag">OpenCV</span>
+        <span class="tag">CUDA</span>
+        <span class="tag">Python</span>
+        <span class="tag">NumPy</span>
+        <span class="tag">BDD100K</span>
+        <span class="tag">Computer Vision</span>
+      </div>
+
+      <!-- NAV LINKS -->
+      <nav class="nav-links">
+
+        <a href="SP104-Red-Traffic-FinalReport.pdf" class="nav-link" target="_blank" title="Final Report PDF">
+          <div class="nav-link-icon">
+            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          </div>
+          <div>
+            Final Report
+            <div class="nav-link-meta">PDF · CS 4850</div>
+          </div>
+        </a>
+
+        <a href="https://github.com/SP104-Traffic-Red/RealTimeTrafficDetection" class="nav-link" target="_blank" title="GitHub Repository">
+          <div class="nav-link-icon">
+            <svg viewBox="0 0 24 24"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+          </div>
+          <div>
+            GitHub Repository
+            <div class="nav-link-meta">Source Code</div>
+          </div>
+        </a>
+
+        <!-- UPDATE: Replace href="#" with your YouTube link once uploaded -->
+        <a href="#" class="nav-link" onclick="alert('Video link coming soon!'); return false;" title="Presentation Video">
+          <div class="nav-link-icon">
+            <svg viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+          </div>
+          <div>
+            Presentation Video
+            <div class="nav-link-meta">Coming Soon</div>
+          </div>
+        </a>
+
+      </nav>
+    </aside>
+
+    <!-- RIGHT PANEL -->
+    <section class="right-panel">
+
+      <div class="section-label">Detection Subjects — Team SP-104</div>
+
+      <div class="team-grid">
+
+        <!-- Tate York -->
+        <div class="member-card">
+          <div class="photo-wrap">
+            <img src="images/tate-york-full.jpeg" alt="Tate York" class="member-photo"
+              onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'" />
+            <div class="photo-placeholder" style="display:none; position:absolute;inset:0;">No Photo</div>
+            <div class="bbox">
+              <div class="bbox-label">PERSON · TEAM_LEAD</div>
+            </div>
+            <div class="conf-score">conf: 0.97</div>
+          </div>
+          <div class="member-info">
+            <div class="member-name">Tate York</div>
+            <div class="member-role">Team Lead · ML Engineer</div>
+          </div>
+        </div>
+
+        <!-- Ryan Booth -->
+        <div class="member-card">
+          <div class="photo-wrap">
+            <img src="images/ryan-booth-full.jpeg" alt="Ryan Booth" class="member-photo"
+              onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'" />
+            <div class="photo-placeholder" style="display:none; position:absolute;inset:0;">No Photo</div>
+            <div class="bbox">
+              <div class="bbox-label">PERSON · SYS_ENG</div>
+            </div>
+            <div class="conf-score">conf: 0.94</div>
+          </div>
+          <div class="member-info">
+            <div class="member-name">Ryan Booth</div>
+            <div class="member-role">Systems Engineer</div>
+          </div>
+        </div>
+
+        <!-- Parsa Rajabi -->
+        <div class="member-card">
+          <div class="photo-wrap">
+            <img src="images/parsa-rajabi-full.png" alt="Parsa Rajabi" class="member-photo"
+              onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'" />
+            <div class="photo-placeholder" style="display:none; position:absolute;inset:0;">No Photo</div>
+            <div class="bbox">
+              <div class="bbox-label">PERSON · ML_ENG</div>
+            </div>
+            <div class="conf-score">conf: 0.96</div>
+          </div>
+          <div class="member-info">
+            <div class="member-name">Parsa Rajabi</div>
+            <div class="member-role">ML Engineer</div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="footer-left">© 2026 Kennesaw State University · CS 4850 Senior Project</div>
+    <div class="footer-right">
+      <span>inference_time: 14.2ms</span>
+      <span>·</span>
+      <span>fps: 30</span>
+      <span>·</span>
+      <span>model: YOLOv8s</span>
+    </div>
+  </footer>
+</div>
+
+<!-- TWEAKS PANEL -->
+<div id="tweaks-panel">
+  <h4>Tweaks</h4>
+  <div class="tweak-row">
+    <label>Accent</label>
+    <select id="tweak-accent" onchange="applyAccent(this.value)">
+      <option value="#FFC425">KSU Gold</option>
+      <option value="#00C2FF">Cyan</option>
+      <option value="#FF6B35">Orange</option>
+      <option value="#A3FF4F">Lime</option>
+    </select>
+  </div>
+  <div class="tweak-row">
+    <label>Grid opacity</label>
+    <input type="range" id="tweak-grid" min="0" max="10" value="3"
+      oninput="applyGrid(this.value)" />
+  </div>
+  <div class="tweak-row">
+    <label>Glow intensity</label>
+    <input type="range" id="tweak-glow" min="0" max="20" value="7"
+      oninput="applyGlow(this.value)" />
+  </div>
+  <div class="tweak-row">
+    <label>Scanlines</label>
+    <select id="tweak-scan" onchange="applyScanlines(this.value)">
+      <option value="1">On</option>
+      <option value="0">Off</option>
+    </select>
+  </div>
+</div>
+
+<script>
+  // Tweaks
+  window.addEventListener('message', e => {
+    if (e.data?.type === '__activate_edit_mode')   document.getElementById('tweaks-panel').style.display = 'block';
+    if (e.data?.type === '__deactivate_edit_mode') document.getElementById('tweaks-panel').style.display = 'none';
+  });
+  window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+
+  const root = document.documentElement;
+
+  function applyAccent(v) {
+    root.style.setProperty('--gold', v);
+    const r = parseInt(v.slice(1,3),16), g = parseInt(v.slice(3,5),16), b = parseInt(v.slice(5,7),16);
+    root.style.setProperty('--gold-dim', `rgba(${r},${g},${b},0.15)`);
+    root.style.setProperty('--gold-mid', `rgba(${r},${g},${b},0.4)`);
+    window.parent.postMessage({ type: '__edit_mode_set_keys', edits: { accent: v }}, '*');
+  }
+
+  function applyGrid(v) {
+    const op = (v / 100).toFixed(2);
+    document.body.style.setProperty('--grid-op', op);
+    // rebuild body::before isn't possible via JS; inject style
+    let s = document.getElementById('__grid-style');
+    if (!s) { s = document.createElement('style'); s.id='__grid-style'; document.head.appendChild(s); }
+    s.textContent = `body::before { background-image: linear-gradient(rgba(255,196,37,${op}) 1px, transparent 1px), linear-gradient(90deg, rgba(255,196,37,${op}) 1px, transparent 1px); background-size: 40px 40px; }`;
+  }
+
+  function applyGlow(v) {
+    let s = document.getElementById('__glow-style');
+    if (!s) { s = document.createElement('style'); s.id='__glow-style'; document.head.appendChild(s); }
+    const op = (v / 100).toFixed(2);
+    s.textContent = `body::after { background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(255,196,37,${op}) 0%, transparent 70%); }`;
+  }
+
+  function applyScanlines(v) {
+    let s = document.getElementById('__scan-style');
+    if (!s) { s = document.createElement('style'); s.id='__scan-style'; document.head.appendChild(s); }
+    s.textContent = v === '0' ? `.photo-wrap::before { display: none; }` : '';
+  }
+</script>
+</body>
+</html>
